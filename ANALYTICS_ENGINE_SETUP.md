@@ -29,7 +29,7 @@
 
 ## 3. 配置wrangler.toml(可选，和上一步二选一，建议)
 
-如果您使用Wrangler CLI进行本地开发，确保您的 `wrangler.toml` 文件中已正确配置Analytics Engine数据集绑定：
+确保您的 `wrangler.toml` 文件中已正确配置Analytics Engine数据集绑定：
 
 ```toml
 [[analytics_engine_datasets]]
