@@ -1,4 +1,8 @@
 # 简易Cloudflare大模型API反代工具
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/dogchild/api-cf)
+
+
 ## 项目介绍
 本项目提供了一个在Cloudflare Workers或Pages上部署的简易解决方案，用于反代中国大陆无法直接访问的大模型API服务。通过本工具，您可以方便地搭建自己的API网关，实现对多个主流大模型服务的访问，同时支持**可选的**API密钥轮询和请求日志记录等增强功能。
 
