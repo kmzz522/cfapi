@@ -66,10 +66,12 @@ async function getNextKeyIndex(db, service, keysCount) {
     
     // Direct operation using D1 standard API, leveraging SQL ON CONFLICT mechanism to ensure atomicity
     const statement = db.prepare(`
-      INSERT INTO ${ROTATION_STATE_TABLE} (service_name, next_index)
-      VALUES (?1, 1)
+      INSERT INTO ${ROTATION_STATE_TABLE} (service_name, next_index, last_updated)
+      VALUES (?1, 1, CURRENT_TIMESTAMP)
       ON CONFLICT(service_name) DO UPDATE
-      SET next_index = (next_index + 1) % ?2
+      SET 
+        next_index = (next_index + 1) % ?2,
+        last_updated = CURRENT_TIMESTAMP
       RETURNING next_index;
     `).bind(service, keysCount);
     
