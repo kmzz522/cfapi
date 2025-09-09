@@ -90,8 +90,9 @@ export default {
    * @param {Request} request The incoming request.
    * @param {object} env Environment variables, including the LOGS binding.
    * @param {object} ctx Execution context, used for ctx.waitUntil().
-   * @returns {Promise<Response>}      */
-async fetch(request, env, ctx) {
+   * @returns {Promise<Response>}
+   */
+  async fetch(request, env, ctx) {
     const startTime = Date.now();
     let response;
     let requestData = {};
@@ -207,38 +208,69 @@ async function handleRequestWithRotation(request, service, env, url) {
           return new Response('未配置轮询api key', { status: 326 });
         }
         
-        // Get next key index to use from D1 database
-        const nextIndex = await getNextKeyIndex(env.DB, service, serviceKeys.length);
-        const selectedKey = serviceKeys[nextIndex];
+        // Optimized rotation retry logic
+        const maxRetries = Math.min(5, serviceKeys.length); // Maximum retries is the smaller of 5 or the number of keys
+        let currentIndex = await getNextKeyIndex(env.DB, service, serviceKeys.length);
+        let lastResponse = null;
         
-        // Set appropriate request headers based on service provider format
-        const headers = new Headers(request.headers);
-        
-        // Avoid unnecessary toLowerCase calls
-        switch (service) {
-          case 'gemini':
-            headers.set('x-goog-api-key', selectedKey);
-            break;
-          case 'claude':
-            headers.set('x-api-key', selectedKey);
-            break;
-          default:
-            headers.set('Authorization', `Bearer ${selectedKey}`);
-            break;
+        for (let retryCount = 0; retryCount < maxRetries; retryCount++) {
+          const selectedKey = serviceKeys[currentIndex];
+          
+          // Set appropriate request headers based on service provider format
+          const headers = new Headers(request.headers);
+          
+          // Avoid unnecessary toLowerCase calls
+          switch (service) {
+            case 'gemini':
+              headers.set('x-goog-api-key', selectedKey);
+              break;
+            case 'claude':
+              headers.set('x-api-key', selectedKey);
+              break;
+            default:
+              headers.set('Authorization', `Bearer ${selectedKey}`);
+              break;
+          }
+          
+          // Create proxy request with new headers and send
+          const proxyRequest = new Request(url.toString(), {
+            method: request.method,
+            headers: headers,
+            body: request.body,
+            redirect: 'follow',
+          });
+          
+          try {
+            lastResponse = await fetch(proxyRequest);
+            
+            // Check if successful or not a 429 error
+            if (lastResponse.status !== 429) {
+              // Request successful or non-429 error, return response
+              const newResponse = new Response(lastResponse.body, lastResponse);
+              applyCorsHeaders(newResponse);
+              return newResponse;
+            }
+            
+            // 429 rate limit error encountered, proceeding to try next available API key
+            
+          } catch (fetchError) {
+            // Request exception, continue with next key
+          }
+          
+          // Move to next key index
+          currentIndex = (currentIndex + 1) % serviceKeys.length;
         }
         
-        // Create proxy request with new headers and send
-        const proxyRequest = new Request(url.toString(), {
-          method: request.method,
-          headers: headers,
-          body: request.body,
-          redirect: 'follow',
-        });
+        // If all keys have been tried or max retries reached
+        if (lastResponse && lastResponse.status === 429) {
+          // All keys returned 429, return the last response
+          const newResponse = new Response(lastResponse.body, lastResponse);
+          applyCorsHeaders(newResponse);
+          return newResponse;
+        }
         
-        const upstreamResponse = await fetch(proxyRequest);
-        const newResponse = new Response(upstreamResponse.body, upstreamResponse);
-        applyCorsHeaders(newResponse);
-        return newResponse;
+        // No valid response, return generic error
+        return new Response('所有API密钥均已超出配额，请稍后再试', { status: 429 });
         
       } catch (e) {
         return new Response(`轮询配置错误: ${e.message}`, { status: 500 });
@@ -271,7 +303,6 @@ async function handleRequestWithRotation(request, service, env, url) {
 async function logRequest(env, requestData, response, startTime, error = null) {
   // Check for LOGS binding to avoid unnecessary computations
   if (!env.LOGS) {
-    console.log("Analytics Engine binding 'LOGS' not found. Skipping logging.");
     return;
   }
 
@@ -306,8 +337,7 @@ async function logRequest(env, requestData, response, startTime, error = null) {
     env.LOGS.writeDataPoint(dataPoint);
 
   } catch (logError) {
-    // When logging itself fails, log to console but don't affect main flow
-    console.error('Failed to log request:', logError);
+    // Ignore logging errors to avoid affecting main process
   }
 }
 
