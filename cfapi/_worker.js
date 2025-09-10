@@ -33,8 +33,24 @@ function extractApiKey(request, service) {
   // Avoid unnecessary toLowerCase calls since service name is already processed in fetch
   switch (service) {
     case 'gemini':
-      // Gemini uses x-goog-api-key header
-      return request.headers.get('x-goog-api-key') || null;
+      // Gemini uses x-goog-api-key header or 'key' query parameter
+      const apiKeyFromHeader = request.headers.get('x-goog-api-key');
+      if (apiKeyFromHeader) {
+        return apiKeyFromHeader;
+      }
+      
+      // Check if URL contains 'key' query parameter
+      try {
+        const url = new URL(request.url);
+        const apiKeyFromUrl = url.searchParams.get('key');
+        if (apiKeyFromUrl) {
+          return apiKeyFromUrl;
+        }
+      } catch (e) {
+        // Ignore URL parsing errors
+      }
+      
+      return null;
     case 'claude':
       // Claude uses x-api-key header
       return request.headers.get('x-api-key') || null;
@@ -221,10 +237,18 @@ async function handleRequestWithRotation(request, service, env, url) {
           // Set appropriate request headers based on service provider format
           const headers = new Headers(request.headers);
           
+          // Create a copy of the URL for modification
+          const modifiedUrl = new URL(url.toString());
+          
           // Avoid unnecessary toLowerCase calls
           switch (service) {
             case 'gemini':
+              // In rotation mode, always use header for API key regardless of original request format
               headers.set('x-goog-api-key', selectedKey);
+              // Remove key parameter from URL if present to avoid conflicts
+              if (modifiedUrl.searchParams.has('key')) {
+                modifiedUrl.searchParams.delete('key');
+              }
               break;
             case 'claude':
               headers.set('x-api-key', selectedKey);
@@ -234,8 +258,8 @@ async function handleRequestWithRotation(request, service, env, url) {
               break;
           }
           
-          // Create proxy request with new headers and send
-          const proxyRequest = new Request(url.toString(), {
+          // Create proxy request with new headers and modified URL
+          const proxyRequest = new Request(modifiedUrl.toString(), {
             method: request.method,
             headers: headers,
             body: request.body,
