@@ -226,8 +226,10 @@ async function handleRequestWithRotation(request, service, env, url) {
           return new Response('未配置轮询api key', { status: 326 });
         }
         
+        // Get rotation limit from environment variables or use default
+        const rotationLimit = env.ROTATION_LIMIT ? parseInt(env.ROTATION_LIMIT) : 5;
         // Optimized rotation retry logic
-        const maxRetries = Math.min(5, serviceKeys.length); // Maximum retries is the smaller of 5 or the number of keys
+        const maxRetries = Math.min(rotationLimit, serviceKeys.length); // Maximum retries is the smaller of rotationLimit or the number of keys
         let currentIndex = await getNextKeyIndex(env.DB, service, serviceKeys.length);
         let lastResponse = null;
         
