@@ -22,7 +22,7 @@ const ROUTE_MAP = {
 };
 
 // 表名常量，方便修改
-const ROTATION_STATE_TABLE = 'rotation_state'; // 用户可以根据实际数据库表名修改
+// const ROTATION_STATE_TABLE = 'rotation_state'; // 用户可以根据实际数据库表名修改
 
 // --- HELPER FUNCTIONS FOR API ROTATION ---
 
